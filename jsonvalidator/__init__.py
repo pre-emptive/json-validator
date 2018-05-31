@@ -30,7 +30,6 @@ class JsonValidator:
             if len(str(data)) < schema['#min_length']:
                 raise ValueError("%d characters long and must be at least %d long" % (len(str(data)), schema['#min_length']))
 
-
     def element_enum(self, current, data, schema, subkeys):
         if isinstance(schema['#options'], list):
             # just make sure the data is in the list
@@ -38,6 +37,7 @@ class JsonValidator:
                 raise ValueError("'%s' is not a valid value" % (data))
         elif isinstance(schema['#options'] ,dict):
             possibles = schema['#options'].keys()
+            output = {}
             if data in possibles:
                 # Ensure data has the same key as the option
                 if data not in current:
@@ -46,6 +46,7 @@ class JsonValidator:
                 # Note: data is 'below' the chunks we want, so we have to use current to get to them
                 # also note that the data differs from the structure of the schema at this point
                 # because the data doesn't include an extra level, whereas the schema does
+                # TODO: Do this better so that we can support optional fields here
                 self.recurse(current[data], schema['#options'][data], subkeys[:-1] + [data])
             else:
                 raise ValueError("'%s' is not a valid value" % (data))
@@ -55,7 +56,7 @@ class JsonValidator:
     def element_fieldset(self, current, data, schema, subkeys):
         if not isinstance(data, dict):
             raise ValueError("Fieldset is not an associative array" )
-        self.recurse(data, schema, subkeys)
+        return self.recurse(data, schema, subkeys)
 
     def element_boolean(self, current, data, schema, subkeys):
         if not isinstance(data, bool):
@@ -86,10 +87,15 @@ class JsonValidator:
         if type(data) is not dict:
             raise ValueError("'%s' is not an associative array" % ('.'.join(subkeys)))
         # Look for anything that is mandatory at this level in the hierarchy
+        # Fill in any defaults too
         for item in schema.keys():
-            if type(schema[item]) is dict and '#required' in schema[item]:
-                if item not in data:
-                    raise ValueError("'%s' is a required key" % ('.'.join(subkeys + [item])))
+            if isinstance(schema[item], dict):
+                if '#default' in schema[item]:
+                    if item not in data:
+                        data[item] = schema[item]['#default']
+                if '#required' in schema[item]:
+                    if item not in data:
+                        raise ValueError("'%s' is a required key" % ('.'.join(subkeys + [item])))
 
         for item in data.keys():
             thing = subkeys + [item]
@@ -107,7 +113,9 @@ class JsonValidator:
                         raise AttributeError("No way to parse element %s for item %s" % (schema[item]['#type'], '.'.join(thing)))
                     self.debug_info.append("No way to parse element %s for item %s" % (schema[item]['#type'], '.'.join(thing)))
                 try:
-                    handle(data, data[item], schema[item], subkeys + [item])
+                    ret = handle(data, data[item], schema[item], subkeys + [item])
+                    if ret:
+                        data[item] = ret
                 except ValueError as e:
                     raise ValueError("%s: %s" % ('.'.join(thing), e))
                 # Having parsed the specific element attributes, now check #validator
@@ -119,6 +127,7 @@ class JsonValidator:
                             raise AttributeError("No validator '%s' for item %s" % (schema[item]['#validator'], '.'.join(thing)))
                         self.debug_info.append("No validator '%s' for item %s" % (schema[item]['#validator'], '.'.join(thing)))
                     handle(data[item], schema[item], subkeys + [item])
+        return data
 
     def validate(self, data):
-        self.recurse(data, self.schema, [])
+        return self.recurse(data, self.schema, [])

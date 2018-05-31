@@ -7,7 +7,7 @@ setup(
     url='https://github.com/pre-emptive/json-validator',
     author='Ralph Bolton',
     author_email='devnull@coofercat.com',
-    version='1.0.0',
+    version='1.1.0',
     packages=['jsonvalidator'],
     license='GPLv2',
     long_description=open('README.md').read(),
